@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>決策日誌 — Naxvo</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Noto+Sans+TC:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --surface: #111111;
+    --surface2: #1a1a1a;
+    --border: #222222;
+    --border2: #2e2e2e;
+    --text: #e8e8e8;
+    --text2: #888888;
+    --text3: #555555;
+    --accent: #c8f542;
+    --accent-dim: rgba(200,245,66,0.12);
+    --success: #4ade80;
+    --success-dim: rgba(74,222,128,0.1);
+    --fail: #f87171;
+    --fail-dim: rgba(248,113,113,0.1);
+    --pivot: #60a5fa;
+    --pivot-dim: rgba(96,165,250,0.1);
+    --pending: #fbbf24;
+    --pending-dim: rgba(251,191,36,0.1);
+    --radius: 6px;
+    --mono: 'DM Mono', monospace;
+    --sans: 'Noto Sans TC', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  /* Layout */
+  .layout { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 2rem 1.5rem;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .logo {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+  }
+
+  .logo-sub {
+    font-size: 11px;
+    color: var(--text3);
+    font-family: var(--mono);
+    margin-bottom: 2rem;
+  }
+
+  .nav-label {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--text3);
+    text-transform: uppercase;
+    font-family: var(--mono);
+    margin-bottom: 0.5rem;
+    margin-top: 1.5rem;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text2);
+    border: 1px solid transparent;
+    transition: all 0.15s;
+    margin-bottom: 2px;
+    background: none;
+    width: 100%;
+    text-align: left;
+  }
+
+  .nav-item:hover { color: var(--text); background: var(--surface2); }
+  .nav-item.active { color: var(--text); background: var(--surface2); border-color: var(--border2); }
+  .nav-item.active .nav-dot { background: var(--accent); }
+
+  .nav-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--text3);
+    flex-shrink: 0;
+  }
+  .nav-dot.success { background: var(--success); }
+  .nav-dot.fail { background: var(--fail); }
+  .nav-dot.pivot { background: var(--pivot); }
+  .nav-dot.pending { background: var(--pending); }
+
+  .nav-count {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+  }
+
+  .sidebar-footer {
+    margin-top: auto;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text3);
+    font-family: var(--mono);
+  }
+
+  /* Main */
+  .main { padding: 2.5rem 3rem; max-width: 900px; }
+
+  .page-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 2rem;
+  }
+
+  .page-title {
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .page-sub {
+    font-size: 12px;
+    color: var(--text3);
+    font-family: var(--mono);
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #0a0a0a;
+    border: none;
+    padding: 9px 18px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: var(--sans);
+    transition: opacity 0.15s;
+    white-space: nowrap;
+  }
+  .btn-primary:hover { opacity: 0.85; }
+
+  /* Stats */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 2rem;
+  }
+
+  .stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem 1.25rem;
+  }
+
+  .stat-num {
+    font-family: var(--mono);
+    font-size: 28px;
+    font-weight: 400;
+    margin-bottom: 2px;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    color: var(--text3);
+    letter-spacing: 0.05em;
+  }
+
+  /* Modal */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 10px;
+    padding: 2rem;
+    width: 560px;
+    max-width: 95vw;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  .modal-title {
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 1.5rem;
+    color: var(--text);
+  }
+
+  .field { margin-bottom: 1rem; }
+  .field label {
+    display: block;
+    font-size: 11px;
+    color: var(--text3);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-family: var(--mono);
+    margin-bottom: 6px;
+  }
+
+  .field input,
+  .field textarea,
+  .field select {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-size: 13px;
+    padding: 9px 12px;
+    font-family: var(--sans);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .field input:focus,
+  .field textarea:focus,
+  .field select:focus { border-color: var(--accent); }
+
+  .field textarea { resize: vertical; min-height: 80px; line-height: 1.6; }
+
+  .field select option { background: var(--surface); }
+
+  .outcome-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+
+  .outcome-option {
+    padding: 8px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border2);
+    background: transparent;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text2);
+    text-align: center;
+    transition: all 0.15s;
+    font-family: var(--sans);
+  }
+
+  .outcome-option:hover { border-color: var(--border2); background: var(--surface2); }
+  .outcome-option[data-v="success"].sel { background: var(--success-dim); border-color: var(--success); color: var(--success); }
+  .outcome-option[data-v="fail"].sel { background: var(--fail-dim); border-color: var(--fail); color: var(--fail); }
+  .outcome-option[data-v="pivot"].sel { background: var(--pivot-dim); border-color: var(--pivot); color: var(--pivot); }
+  .outcome-option[data-v="pending"].sel { background: var(--pending-dim); border-color: var(--pending); color: var(--pending); }
+
+  .modal-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid var(--border2);
+    color: var(--text2);
+    padding: 8px 16px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    cursor: pointer;
+    font-family: var(--sans);
+    transition: all 0.15s;
+  }
+  .btn-ghost:hover { color: var(--text); border-color: var(--border2); background: var(--surface2); }
+
+  /* Entries */
+  .entries { display: flex; flex-direction: column; gap: 1px; }
+
+  .entry {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 8px;
+    transition: border-color 0.15s;
+    cursor: pointer;
+  }
+  .entry:hover { border-color: var(--border2); }
+
+  .entry-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 10px;
+  }
+
+  .entry-title {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 3px;
+  }
+
+  .entry-meta {
+    font-size: 11px;
+    color: var(--text3);
+    font-family: var(--mono);
+    display: flex;
+    gap: 12px;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-family: var(--mono);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .badge.success { background: var(--success-dim); color: var(--success); border: 1px solid rgba(74,222,128,0.2); }
+  .badge.fail { background: var(--fail-dim); color: var(--fail); border: 1px solid rgba(248,113,113,0.2); }
+  .badge.pivot { background: var(--pivot-dim); color: var(--pivot); border: 1px solid rgba(96,165,250,0.2); }
+  .badge.pending { background: var(--pending-dim); color: var(--pending); border: 1px solid rgba(251,191,36,0.2); }
+
+  .entry-body { display: none; }
+  .entry.expanded .entry-body { display: block; }
+
+  .entry-section {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  .entry-section-label {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text3);
+    font-family: var(--mono);
+    margin-bottom: 4px;
+  }
+
+  .entry-section-text {
+    font-size: 13px;
+    color: var(--text2);
+    line-height: 1.7;
+  }
+
+  .entry-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 1rem;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+
+  .btn-sm {
+    background: transparent;
+    border: 1px solid var(--border2);
+    color: var(--text3);
+    padding: 5px 12px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    cursor: pointer;
+    font-family: var(--mono);
+    transition: all 0.15s;
+  }
+  .btn-sm:hover { color: var(--text); border-color: var(--border2); }
+  .btn-sm.danger:hover { color: var(--fail); border-color: var(--fail); }
+
+  /* Empty */
+  .empty {
+    text-align: center;
+    padding: 5rem 2rem;
+    color: var(--text3);
+    font-family: var(--mono);
+    font-size: 13px;
+    border: 1px dashed var(--border2);
+    border-radius: var(--radius);
+  }
+
+  .empty-title { font-size: 15px; color: var(--text2); margin-bottom: 8px; }
+
+  /* Loading */
+  .loading {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text3);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    padding: 10px 18px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    z-index: 200;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: all 0.2s;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  @media (max-width: 768px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .main { padding: 1.5rem; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .outcome-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo">Naxvo</div>
+    <div class="logo-sub">決策日誌</div>
+
+    <div class="nav-label">篩選</div>
+    <button class="nav-item active" onclick="setFilter('all', this)">
+      <span class="nav-dot"></span> 全部
+      <span class="nav-count" id="cnt-all">0</span>
+    </button>
+    <button class="nav-item" onclick="setFilter('success', this)">
+      <span class="nav-dot success"></span> 成功
+      <span class="nav-count" id="cnt-success">0</span>
+    </button>
+    <button class="nav-item" onclick="setFilter('fail', this)">
+      <span class="nav-dot fail"></span> 失敗
+      <span class="nav-count" id="cnt-fail">0</span>
+    </button>
+    <button class="nav-item" onclick="setFilter('pivot', this)">
+      <span class="nav-dot pivot"></span> 轉向
+      <span class="nav-count" id="cnt-pivot">0</span>
+    </button>
+    <button class="nav-item" onclick="setFilter('pending', this)">
+      <span class="nav-dot pending"></span> 待觀察
+      <span class="nav-count" id="cnt-pending">0</span>
+    </button>
+
+    <div class="nav-label">類別</div>
+    <button class="nav-item" onclick="setFilter('cat:產品', this)"><span class="nav-dot"></span> 產品</button>
+    <button class="nav-item" onclick="setFilter('cat:行銷', this)"><span class="nav-dot"></span> 行銷</button>
+    <button class="nav-item" onclick="setFilter('cat:技術', this)"><span class="nav-dot"></span> 技術</button>
+    <button class="nav-item" onclick="setFilter('cat:業務', this)"><span class="nav-dot"></span> 業務</button>
+    <button class="nav-item" onclick="setFilter('cat:定價', this)"><span class="nav-dot"></span> 定價</button>
+
+    <div class="sidebar-footer">
+      isaac-wang-naxvo<br>
+      decision-journal
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">決策日誌</h1>
+        <p class="page-sub" id="page-sub">載入中...</p>
+      </div>
+      <button class="btn-primary" onclick="openModal()">+ 新增記錄</button>
+    </div>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-num" id="stat-total" style="color:var(--accent)">—</div>
+        <div class="stat-label">總記錄</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num" id="stat-success" style="color:var(--success)">—</div>
+        <div class="stat-label">成功</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num" id="stat-fail" style="color:var(--fail)">—</div>
+        <div class="stat-label">失敗</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num" id="stat-pivot" style="color:var(--pivot)">—</div>
+        <div class="stat-label">轉向</div>
+      </div>
+    </div>
+
+    <div id="entries-container">
+      <div class="loading">載入中...</div>
+    </div>
+  </main>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modal" onclick="handleOverlayClick(event)">
+  <div class="modal">
+    <div class="modal-title" id="modal-title">新增決策記錄</div>
+
+    <div class="field">
+      <label>決策標題 *</label>
+      <input type="text" id="f-title" placeholder="例：推出診所 AI 自動化封測">
+    </div>
+
+    <div class="field">
+      <label>類別</label>
+      <select id="f-cat">
+        <option value="產品">產品</option>
+        <option value="行銷">行銷</option>
+        <option value="技術">技術</option>
+        <option value="業務">業務</option>
+        <option value="定價">定價</option>
+        <option value="其他">其他</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>當時的假設／預期</label>
+      <textarea id="f-hypothesis" placeholder="我以為⋯⋯會發生，因為⋯⋯"></textarea>
+    </div>
+
+    <div class="field">
+      <label>實際結果</label>
+      <textarea id="f-result" placeholder="實際上發生了什麼⋯⋯"></textarea>
+    </div>
+
+    <div class="field">
+      <label>結果判斷</label>
+      <div class="outcome-grid">
+        <button class="outcome-option" data-v="success" onclick="selectOutcome('success')">✓ 成功</button>
+        <button class="outcome-option" data-v="fail" onclick="selectOutcome('fail')">✗ 失敗</button>
+        <button class="outcome-option" data-v="pivot" onclick="selectOutcome('pivot')">↻ 轉向</button>
+        <button class="outcome-option" data-v="pending" onclick="selectOutcome('pending')">⏳ 待觀察</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>反思：下次我會怎麼做？</label>
+      <textarea id="f-reflection" placeholder="如果重來，我會⋯⋯"></textarea>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal()">取消</button>
+      <button class="btn-primary" onclick="saveEntry()" id="save-btn">儲存</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
